@@ -1,0 +1,11 @@
+name: Output Info
+on: workflow_dispatch
+jobs:
+    info:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Output Github Context
+              run: |
+                  echo "${{ toJSON(github) }}"
+                  echo "The job was automatically triggered by a ${{ github.event_name }} event."
+                  echo "The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
