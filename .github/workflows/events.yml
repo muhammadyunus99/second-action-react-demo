@@ -1,0 +1,31 @@
+name: Events
+on:
+    pull_request:
+        types: [opened, closed]
+        branches:
+            - dev-*
+    workflow_dispatch:
+    push:
+      branches:
+        - main
+        - dev-* # Matches zero or more characters, but does not match the / character
+        - release-*
+        - feat/** # Matches zero or more of any character
+      paths-ignore:
+        - '.github/workflows/*'
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Output event data
+        run: echo "${{ toJSON(github.event) }}"
+      - name: Get code
+        uses: actions/checkout@v3
+      - name: Install dependencies
+        run: npm ci
+      - name: Test code
+        run: npm run test
+      - name: Build code
+        run: npm run build
+      - name: Deploy project
+        run: echo "Deploying..."
