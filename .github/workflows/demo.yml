@@ -1,0 +1,108 @@
+name: Deploy website
+on:
+  push:
+    branches:
+      - main
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get code
+        uses: actions/checkout@v3
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint code
+        run: npm run lint
+      - name: Test code
+        run: npm run test
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      script-file: ${{ steps.publish.outputs.script-file }}
+    steps:
+      - name: Get code
+        uses: actions/checkout@v3
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+            path: ~/.npm
+            key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+      - name: Install dependencies
+        run: npm ci
+      - name: Build website
+        run: npm run build
+      - name: Publish JS filename
+        id: publish
+        run: find dist/assets/*.js -type f -execdir echo 'script-file={}' >> $GITHUB_OUTPUT ';'
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: dist-files
+          path: dist
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get build artifacts
+        uses: actions/download-artifact@v3 # download artifacts and unzip them
+        with:
+          name: dist-files
+      - name: output contents
+        run: ls
+      - name: Output filename
+        run: echo "${{ needs.build.outputs.script-file }}"
+      - name: Deploy
+        run: echo "Deploying..."
+
+# Job Outputs Process 
+# 1. Step Identification:
+# id: publish gives this step a unique identifier so we can reference its outputs later
+
+# 2. Creating Output:
+# The command find dist/assets/*.js finds JavaScript files
+# echo 'script-file={}' >> $GITHUB_OUTPUT creates an output variable:
+# script-file is the name of the output variable
+# {} gets replaced with the found filename
+# >> $GITHUB_OUTPUT writes this to GitHub's special output file
+
+# 3.Accessing Output:
+# At the job level, we declare outputs: to make the value available
+# script-file: ${{ steps.publish.outputs.script-file }} captures the value where:
+# steps.publish refers to the step with id: publish
+# outputs.script-file gets the value we named "script-file"
+
+# In simple terms:
+# The step finds a JavaScript file and saves its name
+# This name is stored in a variable called script-file
+# Other jobs or steps can then use this filename using needs.build.outputs.script-file
+
+
+# The caching strategy and its placement:
+
+# Why Cache Before Install:
+# The cache step comes before npm ci because we want to check if we have previously cached dependencies before attempting to install them
+# If cached dependencies exist, they'll be restored, making npm ci much faster
+# If no cache exists, npm ci will proceed with a fresh install, and the results will be cached for future runs
+
+# The Key Property Explained:
+# key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+# This key is like a unique identifier for the cache and consists of three parts:
+# runner.os: The operating system (like Linux, Windows)
+# node: A literal string to identify this is for Node.js dependencies
+# hashFiles('**/package-lock.json'): A hash of your package-lock.json file
+
+# The key is clever because:
+# It creates different caches for different operating systems
+# If your dependencies change (package-lock.json changes), the hash changes, creating a new cache
+# If nothing changes, the same cache is reused, saving time
+# For example:
+
+# First run: No cache exists → full install → results cached
+# Second run (no dependency changes): Cache hit → dependencies restored quickly
+# After updating dependencies: New hash → new cache created → full install again
